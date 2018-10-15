@@ -1,10 +1,6 @@
 Marine Sampling Simulation
 ================
 
-<style>
-body {text-align: justify}
-</style>
-
 <br>
 
 ## Introduction
