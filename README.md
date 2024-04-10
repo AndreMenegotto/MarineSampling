@@ -7,7 +7,7 @@ André Menegotto
 
 ## Introduction
 
-<div style="text-align:justify;">
+<div align="justify">
 
 The **SampSim** program replicates the real-world sampling effort in a
 virtually controlled environment, which allows for identifying the
@@ -47,14 +47,17 @@ species to simulate, and the number of simulations to execute.
 
 </div>
 
-<img src="./README_Files/Screen1.png" style="display: block; margin: auto;" />
-<center>
-<span style="color: grey;">Simulation program screen display</span>
-</center>
+<img align="center" src="./README_Files/Screen1.png">
+
+<div align="center">
+
+*Simulation program screen display*
+
+</div>
 
 <br>
 
-<div style="text-align:justify;">
+<div align="justify">
 
 The program produces 14 files describing: the true species richness
 \[MatRichCell & MatRichLat\], the observed species richness after
@@ -72,7 +75,7 @@ latitudinal gaps \[MatGapsLat\] and a setting report.
 
 <br>
 
-<div style="text-align:justify;">
+<div align="justify">
 
 #### Range structure
 
@@ -86,32 +89,20 @@ leading to a spatially flat diversity distribution.
 
 </div>
 
-<div style="display: flex;">
+<p align="center">
+<img src="./README_Files/Multimedia1.gif" width="40%" />         
+<img src="./README_Files/Multimedia2.gif" width="40%" />
+</p>
 
-<div>
+<div align="left">
 
-<img src="./README_Files/Multimedia1.gif" width="75%" style="display: block; margin: auto;" />
-<center>
-<span style="color: grey;"><b>     Geometric constraints
-model</b></span>
-</center>
-
-</div>
-
-<div>
-
-<img src="./README_Files/Multimedia2.gif" width="75%" style="display: block; margin: auto;" />
-<center>
-<span style="color: grey;"><b>     Area model</b></span>
-</center>
-
-</div>
+      *Geometric constraints model*                      *Area model*
 
 </div>
 
 <br>
 
-<div style="text-align:justify;">
+<div align="justify">
 
 In addition to defining whether the range should be contiguous (denoted
 by ‘y’ for yes) or not (denoted by ‘n’ for no), the user must also
@@ -125,14 +116,17 @@ the virtual species.
 
 </div>
 
-<img src="./README_Files/Screen2.png" style="display: block; margin: auto;" />
-<center>
-<span style="color: grey;">Simulation program screen display</span>
-</center>
+<img align="center" src="./README_Files/Screen2.png">
+
+<div align="center">
+
+*Simulation program screen display*
+
+</div>
 
 <br>
 
-<div style="text-align:justify;">
+<div align="justify">
 
 #### Sampling protocol
 
@@ -162,14 +156,17 @@ longitudinal disposition of the sampling events across the latitude
 
 </div>
 
-<img src="./README_Files/Screen3.png" style="display: block; margin: auto;" />
-<center>
-<span style="color: grey;">Simulation program screen display</span>
-</center>
+<img align="center" src="./README_Files/Screen3.png">
+
+<div align="center">
+
+*Simulation program screen display*
+
+</div>
 
 <br>
 
-<div style="text-align:justify;">
+<div align="justify">
 
 ## Analyzing brittle star sampling efforts in the Atlantic Ocean
 
