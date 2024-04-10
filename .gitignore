@@ -1,9 +1,9 @@
 .Rproj.user
 .Rhistory
-.RData
 .Ruserdata
 README.Rmd
+Data/Empirical/Raw
+Figures/
+Manuscript/
 Rascunho/
-Data/Basic/ne_10m_ocean/
-Data/Basic/Shapes/
-Analyses/
+Supplement/
