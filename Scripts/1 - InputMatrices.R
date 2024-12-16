@@ -1,24 +1,29 @@
 
-### Preparing input matrices ###
-library(raster)
-library(rgeos)
+#### Preparing input matrices ####
+library(terra)
+
+### Open Atlantic shapefile
+load('./Data/Empirical/Atlantic.RData')
+Atlantic <- unwrap(w_Atlantic)
+AtlGrid <- unwrap(w_AtlGrid)
 
 
 
 #### Neighbor matrix -> NeigCellMat ####
 
-### Open Atlantic shapefile
-load('./Data/Empirical/Atlantic.RData')
+### Reduce Atlantic size a bit to avoid creating unrealistic spatial connections
+b <- buffer(Atlantic, width=-7000)
+x <- intersect(AtlGrid, b)
+length(x)==length(AtlGrid)
 
 
-### Create neighbor matrix
-vizinhos <- gTouches(AtlGrid, byid=TRUE)
-vizinhos[1:10,1:5]
-
-vizinhos <- vizinhos*1
-vizinhos[1:10,1:5]
-#plot(AtlGrid)
-#text(coordinates(AtlGrid)[,1], coordinates(AtlGrid)[,2], vizinhos[,1], cex=.5)
+### Get neighbor matrix ('adjacent' does not work good for this grid)
+vizinhos <- nearby(x, distance=.01, centroids=F, symmetrical=F)
+vizinhos <- data.frame(vizinhos, Value=1)
+vizinhos <- with(vizinhos, tapply(Value, list(from, to), FUN = identity))
+vizinhos <- ifelse(is.na(vizinhos),0,1)
+#plot(AtlGrid, col='grey90')
+#text(crds(centroids(AtlGrid))[,1], crds(centroids(AtlGrid))[,2], vizinhos[,1], cex=.5)
 
 
 ### Export neighbor matrix
@@ -39,15 +44,16 @@ unic <- unic[-which(unic==0)]
 
 
 ### Associate cells ID to each latitude
-cellLat <- matrix(nrow =length(AtlGrid), ncol = 2)
+cellLat <- matrix(nrow = length(AtlGrid), ncol = 2)
 for(i in 1:length(AtlGrid))
 {
   # ID starts in 0 (zero) to be compatible with Object Pascal language
   cellLat[i,1] <- i-1
-  cellLat[i,2] <- AtlGrid@polygons[[i]]@Polygons[[1]]@coords[3,2]
+  cellLat[i,2] <- crds(centroids(AtlGrid[i,]))[,2] #AtlGrid@polygons[[i]]@Polygons[[1]]@coords[3,2]
 }
+cellLat[,2] <- round(cellLat[,2], 1)
 #plot(AtlGrid)
-#text(coordinates(AtlGrid)[,1], coordinates(AtlGrid)[,2], cellLat[,2], cex=.5, col="blue")
+#text(crds(centroids(AtlGrid))[,1], crds(centroids(AtlGrid))[,2], cellLat[,2], cex=.5, col="blue")
 
 
 # This matrix has 3 columns: latitude, ID of the first cell, total number of cells
@@ -55,14 +61,14 @@ CellLatMat <- matrix(nrow = length(unique(cellLat[,2])), ncol = 2)
 CellLatMat <- cbind(unique(cellLat[,2]), CellLatMat)
 for(i in 1:length(unique(cellLat[,2])))
 {
-  x <- which(cellLat[,2]==unique(cellLat[,2])[i])
+  x <- which(cellLat[,2]==CellLatMat[i,1])
   CellLatMat[i,2] <- cellLat[,1][x][1]
   CellLatMat[i,3] <- length(x)
 }
 
 
 ### Combine with sampling information
-CellLatMat <- cbind(CellLatMat,rev(unic))
+CellLatMat <- cbind(CellLatMat,unic)
 
 
 ### Stop here and export data if the number of specimens per sampling event will be fixed
@@ -250,7 +256,7 @@ for(j in 1:length(lev))
   
   for(i in 1:100)
   {
-    # How many specimens I expect to colect at each latitude applying the same number of sampling events
+    # How many specimens I expect to record at each latitude applying the same number of sampling events
     x <- rbeta(sum(duplicated(tempMat[,2:4])==F), RefMat[j,1], RefMat[j,2])*RefMat[j,3]
     x <- ceiling(x)
     matX[i,j] <- sum(x)
@@ -270,7 +276,7 @@ arrows(a[2,],colMeans(matX)-apply(matX, 2, sd),a[2,],colMeans(matX)+apply(matX, 
 
 
 ### Combine the full reference matrix (Latitude, first cell's ID, number of cells, sampling events, parameters to replicate records / sample [alpha, beta, multipler])
-CellLatMat <- cbind(CellLatMat,RefMat[nrow(RefMat):1,])
+CellLatMat <- cbind(CellLatMat,RefMat)
 
 
 ### Stop here and export data if grid cells at each latitude will be sampled at random
@@ -283,20 +289,14 @@ CellLatMat <- cbind(CellLatMat,RefMat[nrow(RefMat):1,])
 ### Create a spatial point for each sampling event
 colnames(ophiAtlant)
 ophiPoints <- unique(ophiAtlant[,c(2:4)])
-ophiPoints <- ophiPoints[,c(1:2)]
-coordinates(ophiPoints) <- ~decimalLongitude+decimalLatitude
-crs(ophiPoints) <- crs(AtlGrid)
+ophiPoints <- vect(ophiPoints, geom=c("decimalLongitude","decimalLatitude"), crs='epsg:4326')
 
-### Find the grid cells with sampling events (distribution)
-sampCells <- ifelse(is.na(over(x = AtlGrid, ophiPoints)), 0, 1)
+### Get the number of sampling events by grid cell (concentration)
+sampByCell <- relate(AtlGrid, ophiPoints, relation='intersects', pairs=F)
+sampByCell <- rowSums(sampByCell)
 
-### Calculate the number of sampling events by grid cell (concentration)
-sampByCell <- numeric()
-for(i in 1:length(AtlGrid))
-{
-  sampByCell[i] <- sum(!is.na(over(ophiPoints, AtlGrid[i,])[,1]))
-  print(i)
-}
+### Get the grid cells with sampling events (distribution)
+sampCells <- ifelse(sampByCell > 0, 1, 0)
 
 ### Calculate the total distribution and spatial concentration of sampling events by latitude
 S_dist <- numeric()
@@ -380,7 +380,7 @@ meanSD90[meanSD90[,2]==0,2] <- NA
 # Real-world distribution and concentration
 x <- barplot(rev(S_dist), space=0, axes=F, col=rgb(0,.749,1,.2), ylim=c(0,1.05)) #deepskyblue
 barplot(rev(S_dist90), add=T, space=0, axes=F, col=rgb(.008,.318,.588,.9)) ##025196
-axis(side=1, at=c(x[1]-0.5,mean(x[c(13,14)]),x[26]+0.5), labels=c('65S','0','65N'), cex.axis=1.4)
+axis(side=1, at=c(x[1]-0.5,mean(x[c(13,14)]),x[26]+0.5), labels=c('65N','0','65S'), cex.axis=1.4)
 axis(side=2, at=seq(0,1,.2), labels=sprintf("%1.1f", seq(0,1,.2)), las=3, pos=-.5, cex.axis=1.2)
 
 # Simulated distribution

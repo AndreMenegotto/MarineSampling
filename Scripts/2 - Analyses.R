@@ -4,19 +4,22 @@
 ### Load packages
 library(vioplot)
 library(viridis)
-library(raster)
+library(terra)
 library(iNEXT)
-library(rgeos)
 
 
 ### Load basic RData
 load("./Data/Empirical/Atlantic.RData")
+Atlantic <- unwrap(w_Atlantic)
+AtlGrid <- unwrap(w_AtlGrid)
+AtlGridCut <- intersect(AtlGrid, Atlantic)
+
 load("./Data/Empirical/Functions.RData")
 CellLatMat <- read.table("./Data/SimInput/CellLatMat.txt", h=F, na.strings = -1)
 
 # Original data from https://www.naturalearthdata.com/
-land <- shapefile("./Data/Empirical/ne_110m_land/ne_110m_land.shp")
-landCut <- suppressWarnings(gIntersection(land, as(extent(AtlGrid), "SpatialPolygons"), byid = TRUE))
+#land <- vect("./Data/Empirical/Raw/ne_110m_land/ne_110m_land.shp")
+#landCut <- intersect(land, as.polygons(ext(Atlantic)))
 
 # Lat values
 OphiLat <- read.table("./Data/Empirical/OphiLat.txt", h=T)
@@ -69,24 +72,23 @@ grid2lat <- function(estMat, CellLatMat=CellLatMat)
 }
 
 ### Notice
-# .Real-world data sets are structured S -> N
-# ..Simulated data sets are structured N -> S
+# .Real-world and simulated data sets are structured S -> N
 
 
 # . Figure 1 ----
 
 ## Plot the sampling map
-plot(AtlGrid, col="grey95", border="transparent")
+plot(AtlGridCut, col="grey95", border="transparent", axes=F)
 
 # This requires the raw data set of occurrence records
 #load("./Data/Empirical/Raw/Ophiuroids.RData")
 #SampSite <- unique(ophiAtlant[,2:3])
-#coordinates(SampSite) <- ~decimalLongitude+decimalLatitude
+#SampSite <- vect(SampSite, geom=c("decimalLongitude","decimalLatitude"), crs='epsg:4326')
 #points(SampSite, pch=20, col="#187bcd", cex=.2)
 
 plot(landCut, col="grey80", border="transparent", add=T)
-plot(as(extent(AtlGrid), "SpatialPolygons"), add=T)
-segments(x0 = extent(AtlGrid)[1], x1 = extent(AtlGrid)[2], y0 = 0, y1 = 0, lty = 2)
+plot(as.polygons(ext(AtlGridCut)), add=T)
+segments(x0 = ext(AtlGridCut)[1], x1 = ext(AtlGridCut)[2], y0 = 0, y1 = 0, lty = 2)
 
 
 ## Plot the richness maps (choose the variable to plot)
@@ -99,18 +101,18 @@ x <- rowMeans(MatObsCelly, na.rm = T)
 
 # For the area model I used only one simulation instead of the simulations' average to better visualize the resulting random pattern
 MatRichCelln <- read.table("./Data/SimOutput/RSFD39_gcN/MatRichCell.txt", h=F, na.strings = -1)
-x <- MatRichCelln[,3]
+x <- MatRichCelln[,2]
 MatObsCelln <- read.table("./Data/SimOutput/RSFD39_gcN/MatObsCell.txt", h=F, na.strings = c(-1,0))
-x <- MatObsCelln[,3]
+x <- MatObsCelln[,2]
 
 # Note: zero richness values are treated as NA in the Observed Matrix because grid cells lacking values are typically omitted from analyses with real-world data sets.
 # To include zero values in the analyses, we must ensure that they signify the absence of species, not the absence of sampling.
 
 
 # Create the color scale
-escala <- cut(x, seq(floor(min(x, na.rm=T)/5)*5, ceiling(max(x, na.rm=T)/5)*5, 5))
+escala <- cut(x, seq(floor(min(x, na.rm=T)/5)*5, ceiling(max(x, na.rm=T)/5)*5, 5), include.lowest=T)
 
-colCode <- numeric(length(AtlGrid@data[,1]))
+colCode <- numeric(length(AtlGrid))
 for(i in 1:length(levels(escala)))
 {
   pos <- which(escala==levels(escala)[i])
@@ -118,10 +120,10 @@ for(i in 1:length(levels(escala)))
 }
 
 # Plot the map
-plot(AtlGrid, col=colCode, border="transparent")
+plot(AtlGridCut, col=colCode, border="transparent", axes=F)
 plot(landCut, col="grey80", border="transparent", add=T)
-plot(as(extent(AtlGrid), "SpatialPolygons"), add=T)
-segments(x0 = extent(AtlGrid)[1], x1 = extent(AtlGrid)[2], y0 = 0, y1 = 0, lty = 2)
+plot(as.polygons(ext(AtlGridCut)), add=T)
+segments(x0 = ext(AtlGridCut)[1], x1 = ext(AtlGridCut)[2], y0 = 0, y1 = 0, lty = 2)
 
 
 ## Gamma diversity
@@ -136,32 +138,32 @@ MatRichLatn <- read.table("./Data/SimOutput/RSFD39_gcN/MatRichLat.txt", h=F, na.
 MatObsLatn <- read.table("./Data/SimOutput/RSFD39_gcN/MatObsLat.txt", h=F, na.strings = c(-1,0))
 
 # These plots are reversed because they are used in the vertical, next to the maps
-x <- barplot(rowMeans(MatRichLaty)/max(rowMeans(MatRichLaty)), col=rgb(.95,.95,.95), space=0, ylim=c(0,1), axes=F)
-barplot(rowMeans(MatObsLaty)/max(rowMeans(MatRichLaty)), col=rgb(.6,.6,.6), space=0, axes=F, add=T)
+x <- barplot(rev(rowMeans(MatRichLaty))/max(rowMeans(MatRichLaty)), col=rgb(.95,.95,.95), space=0, ylim=c(0,1), axes=F)
+barplot(rev(rowMeans(MatObsLaty))/max(rowMeans(MatRichLaty)), col=rgb(.6,.6,.6), space=0, axes=F, add=T)
 axis(side=1, at=c(x[1]-0.5,mean(x[c(13,14)]),x[26]+0.5), labels=c('65N','0','65S'), cex.axis=1.4)
 axis(side=4, at=seq(0,1,.2), labels=sprintf("%1.1f", seq(0,1,.2)), las=0, pos=26+1, lwd=1.4, cex.axis=1.4)
 
-barplot(rowMeans(MatRichLatn)/max(rowMeans(MatRichLatn)), col=rgb(.95,.95,.95), space=0, ylim=c(0,1), axes=F)
-barplot(rowMeans(MatObsLatn)/max(rowMeans(MatRichLatn)), col=rgb(.6,.6,.6), space=0, axes=F, add=T)
+barplot(rev(rowMeans(MatRichLatn))/max(rowMeans(MatRichLatn)), col=rgb(.95,.95,.95), space=0, ylim=c(0,1), axes=F)
+barplot(rev(rowMeans(MatObsLatn))/max(rowMeans(MatRichLatn)), col=rgb(.6,.6,.6), space=0, axes=F, add=T)
 axis(side=1, at=c(x[1]-0.5,mean(x[c(13,14)]),x[26]+0.5), labels=c('65N','0','65S'), cex.axis=1.4)
 axis(side=4, at=seq(0,1,.2), labels=sprintf("%1.1f", seq(0,1,.2)), las=0, pos=26+1, lwd=1.4, cex.axis=1.4)
 
 
 # Correlations
 plot(rowMeans(MatRichLaty), rowMeans(MatRichLatn))
-round(cor(rowMeans(MatRichLaty), rowMeans(MatRichLatn), method = 'p'), 2) #-0.54
+round(cor(rowMeans(MatRichLaty), rowMeans(MatRichLatn), method = 'p'), 2) #0.62
 plot(rowMeans(MatObsLaty), rowMeans(MatObsLatn))
-round(cor(rowMeans(MatObsLaty), rowMeans(MatObsLatn), method = 'p'), 2) #0.93
+round(cor(rowMeans(MatObsLaty), rowMeans(MatObsLatn), method = 'p'), 2) #0.89
 
 plot(rowMeans(MatObsLaty), rowMeans(MatRichLaty))
-round(cor(rowMeans(MatObsLaty), rowMeans(MatRichLaty), method = 'p'), 2) #-0.03
+round(cor(rowMeans(MatObsLaty), rowMeans(MatRichLaty), method = 'p'), 2) #0.22
 plot(rowMeans(MatObsLatn), rowMeans(MatRichLatn))
-round(cor(rowMeans(MatObsLatn), rowMeans(MatRichLatn), method = 'p'), 2) #0.43
+round(cor(rowMeans(MatObsLatn), rowMeans(MatRichLatn), method = 'p'), 2) #0.17
 
 plot(rev(rowMeans(MatObsLaty)), SPrich)
-round(cor(rev(rowMeans(MatObsLaty)), SPrich, method = 'p'), 2) #0.84
+round(cor(rowMeans(MatObsLaty), SPrich, method = 'p'), 2) #0.88
 plot(rev(rowMeans(MatObsLatn)), SPrich)
-round(cor(rev(rowMeans(MatObsLatn)), SPrich, method = 'p'), 2) #0.68
+round(cor(rowMeans(MatObsLatn), SPrich, method = 'p'), 2) #0.71
 
 
 ## Alpha diversity
@@ -175,32 +177,32 @@ avObsy <- grid2lat(estMat = MatObsCelly, CellLatMat = CellLatMat)[,1]
 avRichn <- grid2lat(estMat = MatRichCelln, CellLatMat = CellLatMat)[,1]
 avObsn <- grid2lat(estMat = MatObsCelln, CellLatMat = CellLatMat)[,1]
 
-x <- barplot(avRichy/max(avRichy), col=rgb(.95,.95,.95), space=0, ylim=c(0,1), axes=F)
-barplot(avObsy/max(avRichy), col=rgb(.6,.6,.6), space=0, axes=F, add=T)
+x <- barplot(rev(avRichy)/max(avRichy), col=rgb(.95,.95,.95), space=0, ylim=c(0,1), axes=F)
+barplot(rev(avObsy)/max(avRichy), col=rgb(.6,.6,.6), space=0, axes=F, add=T)
 axis(side=1, at=c(x[1]-0.5,mean(x[c(13,14)]),x[26]+0.5), labels=c('65N','0','65S'), cex.axis=1.4)
 axis(side=4, at=seq(0,1,.2), labels=sprintf("%1.1f", seq(0,1,.2)), las=0, pos=26+1, lwd=1.4, cex.axis=1.4)
 
-x <- barplot(avRichn/max(avRichn), col=rgb(.95,.95,.95), space=0, ylim=c(0,1), axes=F)
-barplot(avObsn/max(avRichn), col=rgb(.6,.6,.6), space=0, axes=F, add=T)
+x <- barplot(rev(avRichn)/max(avRichn), col=rgb(.95,.95,.95), space=0, ylim=c(0,1), axes=F)
+barplot(rev(avObsn)/max(avRichn), col=rgb(.6,.6,.6), space=0, axes=F, add=T)
 axis(side=1, at=c(x[1]-0.5,mean(x[c(13,14)]),x[26]+0.5), labels=c('65N','0','65S'), cex.axis=1.4)
 axis(side=4, at=seq(0,1,.2), labels=sprintf("%1.1f", seq(0,1,.2)), las=0, pos=26+1, lwd=1.4, cex.axis=1.4)
 
 
 # Correlations
 plot(avRichy, avRichn)
-round(cor(avRichy, avRichn, method = 'p'), 2) #-0.21
+round(cor(avRichy, avRichn, method = 'p'), 2) #0.15
 plot(avObsy, avObsn)
 round(cor(avObsy, avObsn, method = 'p'), 2) #0.98
 
 plot(avObsy, avRichy)
-round(cor(avObsy, avRichy, method = 'p'), 2) #-0.27
+round(cor(avObsy, avRichy, method = 'p'), 2) #-0.45
 plot(avObsn, avRichn)
-round(cor(avObsn, avRichn, method = 'p'), 2) #-0.09
+round(cor(avObsn, avRichn, method = 'p'), 2) #-0.06
 
-plot(rev(avObsy), SPrichCell[,1])
-round(cor(rev(avObsy), SPrichCell[,1], method = 'p'), 2) #0.54
-plot(rev(avObsn), SPrichCell[,1])
-round(cor(rev(avObsn), SPrichCell[,1], method = 'p'), 2) #0.48
+plot(avObsy, SPrichCell[,1])
+round(cor(avObsy, SPrichCell[,1], method = 'p'), 2) #0.55
+plot(avObsn, SPrichCell[,1])
+round(cor(avObsn, SPrichCell[,1], method = 'p'), 2) #0.51
 
 
 
@@ -234,8 +236,8 @@ axis(side=1, at=c(x[1]-0.5,mean(x[c(13,14)]),x[26]+0.5), labels=c('65S','0','65N
 axis(side=2, at=seq(0,1,.2), labels=sprintf("%1.1f", seq(0,1,.2)), las=1, pos=-.5, lwd=1.5, cex.axis=1.2)
 
 polygon(c(.5:25.5, rev(.5:25.5)), c(OphiSC[,3], rev(OphiSC[,2])), col=rgb(2,81,150,50, maxColorValue = 255), border=NA)
-polygon(c(.5:9.5, rev(.5:9.5)), c(OphiSCCell[1:10,1]+OphiSCCell[1:10,2], rev(OphiSCCell[1:10,1]-OphiSCCell[1:10,2])), col=rgb(253,179,56,50, maxColorValue = 255), border=NA)
-polygon(c((11.5:25.5), rev(11.5:25.5)), c(OphiSCCell[12:26,1]+OphiSCCell[12:26,2], rev(OphiSCCell[12:26,1]-OphiSCCell[12:26,2])), col=rgb(253,179,56,50, maxColorValue = 255), border=NA)
+polygon(c(.5:8.5, rev(.5:8.5)), c(OphiSCCell[1:9,1]+OphiSCCell[1:9,2], rev(OphiSCCell[1:9,1]-OphiSCCell[1:9,2])), col=rgb(253,179,56,50, maxColorValue = 255), border=NA)
+polygon(c((10.5:25.5), rev(10.5:25.5)), c(OphiSCCell[11:26,1]+OphiSCCell[11:26,2], rev(OphiSCCell[11:26,1]-OphiSCCell[11:26,2])), col=rgb(253,179,56,50, maxColorValue = 255), border=NA)
 lines(OphiSC[,1], x = x, lty=2)
 lines(OphiSCCell[,1], x = x, lty=2)
 points(OphiSC[,1], x = x, pch=21, bg=rgb(2,81,150, maxColorValue = 255), col="black", cex=2)
@@ -252,15 +254,16 @@ MatGapsLatST <- rowMeans(MatGapsLaty)/max(rowMeans(MatObsLaty))
 meanSD1 <- cbind(rowMeans(SCLaty, na.rm=T), apply(SCLaty, 1, sd, na.rm=T))
 meanSD2 <- grid2lat(estMat = SCCelly, CellLatMat = CellLatMat)
 
-x <- barplot(rev(MatGapsLatST), col=rgb(.8,.8,.8), space=0, ylim=c(0,1.025), axes=F)
+x <- barplot(MatGapsLatST, col=rgb(.8,.8,.8), space=0, ylim=c(0,1.025), axes=F)
 axis(side=1, at=c(x[1]-0.5,mean(x[c(13,14)]),x[26]+0.5), labels=c('65S','0','65N'), cex.axis=1.2)
 axis(side=2, at=seq(0,1,.2), labels=sprintf("%1.1f", seq(0,1,.2)), las=1, pos=-.5, lwd=1.5, cex.axis=1.2)
-polygon(c(.5:25.5, rev(.5:25.5)), c(rev(meanSD1[,1]+meanSD1[,2]), meanSD1[,1]-meanSD1[,2]), col=rgb(2,81,150,50, maxColorValue = 255), border=NA)
-polygon(c(.5:25.5, rev(.5:25.5)), c(rev(meanSD2[,1]+meanSD2[,2]), meanSD2[,1]-meanSD2[,2]), col=rgb(253,179,56,50, maxColorValue = 255), border=NA)
-lines(rev(meanSD1[,1]), x = x, lty=2)
-lines(rev(meanSD2[,1]), x = x, lty=2)
-points(rev(meanSD1[,1]), x = x, pch=21, bg=rgb(2,81,150, maxColorValue = 255), col="black", cex=2)
-points(rev(meanSD2[,1]), x = x, pch=21, bg=rgb(253,179,56, maxColorValue = 255), col="black", cex=2)
+polygon(c(.5:25.5, rev(.5:25.5)), c(meanSD1[,1]+meanSD1[,2], rev(meanSD1[,1]-meanSD1[,2])), col=rgb(2,81,150,50, maxColorValue = 255), border=NA)
+polygon(c(.5:12.5, rev(.5:12.5)), c((meanSD2[1:13,1]+meanSD2[1:13,2]), rev(meanSD2[1:13,1]-meanSD2[1:13,2])), col=rgb(253,179,56,50, maxColorValue = 255), border=NA)
+polygon(c(14.5:25.5, rev(14.5:25.5)), c((meanSD2[15:26,1]+meanSD2[15:26,2]), rev(meanSD2[15:26,1]-meanSD2[15:26,2])), col=rgb(253,179,56,50, maxColorValue = 255), border=NA)
+lines(meanSD1[,1], x = x, lty=2)
+lines(meanSD2[,1], x = x, lty=2)
+points(meanSD1[,1], x = x, pch=21, bg=rgb(2,81,150, maxColorValue = 255), col="black", cex=2)
+points(meanSD2[,1], x = x, pch=21, bg=rgb(253,179,56, maxColorValue = 255), col="black", cex=2)
 
 
 ## Area model
@@ -273,20 +276,20 @@ MatGapsLatST <- rowMeans(MatGapsLatn)/max(rowMeans(MatObsLatn))
 meanSD1 <- cbind(rowMeans(SCLatn, na.rm=T), apply(SCLatn, 1, sd, na.rm=T))
 meanSD2 <- grid2lat(estMat = SCCelln, CellLatMat = CellLatMat)
 
-x <- barplot(rev(MatGapsLatST), col=rgb(.8,.8,.8), space=0, ylim=c(0,1.025), axes=F)
+x <- barplot(MatGapsLatST, col=rgb(.8,.8,.8), space=0, ylim=c(0,1.025), axes=F)
 axis(side=1, at=c(x[1]-0.5,mean(x[c(13,14)]),x[26]+0.5), labels=c('65S','0','65N'), cex.axis=1.2)
 axis(side=2, at=seq(0,1,.2), labels=sprintf("%1.1f", seq(0,1,.2)), las=1, pos=-.5, lwd=1.5, cex.axis=1.2)
-polygon(c(.5:25.5, rev(.5:25.5)), c(rev(meanSD1[,1]+meanSD1[,2]), meanSD1[,1]-meanSD1[,2]), col=rgb(2,81,150,50, maxColorValue = 255), border=NA)
-polygon(c(.5:12.5, rev(.5:12.5)), c(rev(meanSD2[,1]+meanSD2[,2])[1:13], (meanSD2[,1]-meanSD2[,2])[14:26]), col=rgb(253,179,56,50, maxColorValue = 255), border=NA)
-polygon(c(14.5:25.5, rev(14.5:25.5)), c(rev(meanSD2[,1]+meanSD2[,2])[15:26], (meanSD2[,1]-meanSD2[,2])[1:12]), col=rgb(253,179,56,50, maxColorValue = 255), border=NA)
-lines(rev(meanSD1[,1]), x = x, lty=2)
-lines(rev(meanSD2[,1]), x = x, lty=2)
-points(rev(meanSD1[,1]), x = x, pch=21, bg=rgb(2,81,150, maxColorValue = 255), col="black", cex=2)
-points(rev(meanSD2[,1]), x = x, pch=21, bg=rgb(253,179,56, maxColorValue = 255), col="black", cex=2)
+polygon(c(.5:25.5, rev(.5:25.5)), c(meanSD1[,1]+meanSD1[,2], rev(meanSD1[,1]-meanSD1[,2])), col=rgb(2,81,150,50, maxColorValue = 255), border=NA)
+polygon(c(.5:12.5, rev(.5:12.5)), c((meanSD2[1:13,1]+meanSD2[1:13,2]), rev(meanSD2[1:13,1]-meanSD2[1:13,2])), col=rgb(253,179,56,50, maxColorValue = 255), border=NA)
+polygon(c(14.5:25.5, rev(14.5:25.5)), c((meanSD2[15:26,1]+meanSD2[15:26,2]), rev(meanSD2[15:26,1]-meanSD2[15:26,2])), col=rgb(253,179,56,50, maxColorValue = 255), border=NA)
+lines(meanSD1[,1], x = x, lty=2)
+lines(meanSD2[,1], x = x, lty=2)
+points(meanSD1[,1], x = x, pch=21, bg=rgb(2,81,150, maxColorValue = 255), col="black", cex=2)
+points(meanSD2[,1], x = x, pch=21, bg=rgb(253,179,56, maxColorValue = 255), col="black", cex=2)
 
 
 # Correlations (completeness between models)
-round(cor(rowMeans(SCLaty, na.rm=T), rowMeans(SCLatn, na.rm=T), method = 'p'), 2) #0.99
+round(cor(rowMeans(SCLaty, na.rm=T), rowMeans(SCLatn, na.rm=T), method = 'p'), 2) #0.98
 
 meanSDy <- grid2lat(estMat = SCCelly, CellLatMat = CellLatMat)[,1]
 meanSDn <- grid2lat(estMat = SCCelln, CellLatMat = CellLatMat)[,1]
@@ -294,38 +297,38 @@ round(cor(meanSDy, meanSDn, method = 'p'), 2) #0.99
 
 
 # Correlations (completeness vs. sampling)
-plot(USamp, rev(rowMeans(SCLaty, na.rm=T)))
-round(cor(rev(rowMeans(SCLaty, na.rm=T)), USamp, method = 'spearman'), 2)  #0.98
-round(cor(rev(rowMeans(SCLatn, na.rm=T)), USamp, method = 'spearman'), 2)  #0.99
+plot(USamp, rowMeans(SCLaty, na.rm=T))
+round(cor(rowMeans(SCLaty, na.rm=T), USamp, method = 'spearman'), 2)  #0.97
+round(cor(rowMeans(SCLatn, na.rm=T), USamp, method = 'spearman'), 2)  #0.99
 
-plot(aggregate(SampData$samp, by=list(SampData$lat), mean)[,2], rev(meanSDy))
-round(cor(rev(meanSDy), aggregate(SampData$samp, by=list(SampData$lat), mean)[,2], method = 'spearman'), 2) #0.85
-round(cor(rev(meanSDn), aggregate(SampData$samp, by=list(SampData$lat), mean)[,2], method = 'spearman'), 2)  #0.85
+plot(aggregate(SampData$samp, by=list(SampData$lat), mean)[,2], meanSDy)
+round(cor(meanSDy, aggregate(SampData$samp, by=list(SampData$lat), mean)[,2], method = 'spearman'), 2) #0.86
+round(cor(meanSDn, aggregate(SampData$samp, by=list(SampData$lat), mean)[,2], method = 'spearman'), 2)  #0.84
 
 
-# Correlations (completeness|sampling vs. gaps)
+# Correlations (sampling|completeness vs. gaps)
+plot(USamp, rowMeans(MatGapsLaty))
+round(cor(rowMeans(MatGapsLaty), USamp, method = 'spearman'), 2) #-0.91
+round(cor(rowMeans(MatGapsLatn), USamp, method = 'spearman'), 2) #-0.92
+
 plot(rowMeans(MatGapsLaty), rowMeans(SCLaty, na.rm=T))
 round(cor(rowMeans(SCLaty, na.rm=T), rowMeans(MatGapsLaty), method = 'p'), 2)  #-0.99
 round(cor(rowMeans(SCLatn, na.rm=T), rowMeans(MatGapsLatn), method = 'p'), 2)  #-0.99
 
-plot(USamp, rev(rowMeans(MatGapsLaty)))
-round(cor(rev(rowMeans(MatGapsLaty)), USamp, method = 'spearman'), 2) #-0.92
-round(cor(rev(rowMeans(MatGapsLatn)), USamp, method = 'spearman'), 2) #-0.93
-
 
 # Correlations (completeness: simulated vs. real world)
-plot(rev(rowMeans(SCLaty, na.rm=T)), OphiSC[,1])
-round(cor(OphiSC[,1], rev(rowMeans(SCLaty, na.rm=T)), method = 'spearman'), 2) #0.96
-round(cor(OphiSC[,1], rev(rowMeans(SCLatn, na.rm=T)), method = 'spearman'), 2) #0.94
+plot(rowMeans(SCLaty, na.rm=T), OphiSC[,1])
+round(cor(OphiSC[,1], rowMeans(SCLaty, na.rm=T), method = 'spearman'), 2) #0.97
+round(cor(OphiSC[,1], rowMeans(SCLatn, na.rm=T), method = 'spearman'), 2) #0.95
 
-rmNA <- which(is.na(OphiSCCell[,1]))
-plot(OphiSCCell[-rmNA,1], rev(meanSDy[-rmNA]))
-round(cor(rev(meanSDy[-rmNA]), OphiSCCell[-rmNA,1], method = 'spearman'), 2) #0.35
-round(cor(rev(meanSDn[-rmNA]), OphiSCCell[-rmNA,1], method = 'spearman'), 2) #0.33
+rmNA <- which(!is.na(OphiSCCell[,1]))
+plot(OphiSCCell[rmNA,1], meanSDy[rmNA])
+round(cor(meanSDy[rmNA], OphiSCCell[rmNA,1], method = 'spearman'), 2) #0.51
+round(cor(meanSDn[rmNA], OphiSCCell[rmNA,1], method = 'spearman'), 2) #0.49
 
-plot(rev(rowMeans(MatGapsLaty)), SPgaps)
-round(cor(SPgaps,rev(rowMeans(MatGapsLaty)), method = 'p'), 2) #0.36
-round(cor(SPgaps,rev(rowMeans(MatGapsLatn)), method = 'p'), 2) #0.40
+plot(rowMeans(MatGapsLaty), SPgaps)
+round(cor(SPgaps,rowMeans(MatGapsLaty), method = 'p'), 2) #0.48
+round(cor(SPgaps,rowMeans(MatGapsLatn), method = 'p'), 2) #0.41
 
 
 # Correlations (sampling vs. completeness vs. gaps - real world)
@@ -337,6 +340,22 @@ round(cor(OphiSC[,1], SPgaps, method = 'spearman'), 2) #-0.45
 
 plot(SPgaps, USamp)
 round(cor(USamp, SPgaps, method = 'spearman'), 2) #-0.28
+
+
+# How frequently it was no possible to calculate complenteness?
+# Empirical data set
+sum(!is.na(OphiLat$USamp) & is.na(OphiLat$SC))/nrow(OphiLat) #0 Latitudes
+sum(!is.na(OphiCell$USamp) & is.na(OphiCell$SC))/nrow(OphiCell) #24% of the cells
+
+# Simulated data set
+fold <- "RSFD39_gcY"
+obs <- read.table(paste("./Data/SimOutput/",fold,"/MatObsLat.txt",sep=""), h=F, na.strings = c(-1,0))
+sc <- read.table(paste("./Data/SimOutput/",fold,"/MatCoverageLat.txt",sep=""), h=F, na.strings = -1)
+mean(colSums(!is.na(obs) & is.na(sc))/nrow(sc)) # < 1%
+
+obs <- read.table(paste("./Data/SimOutput/",fold,"/MatObsCell.txt",sep=""), h=F, na.strings = c(-1,0))
+sc <- read.table(paste("./Data/SimOutput/",fold,"/MatCoverageCell.txt",sep=""), h=F, na.strings = -1)
+mean(colSums(!is.na(obs) & is.na(sc))/nrow(sc)) #26%
 
 
 
@@ -359,7 +378,7 @@ estMat <- MatInExtLat
 estMat <- MatES50Lat
 
 estSTD <- rowMeans(estMat, na.rm=T)
-estSTD <- apply(cbind(estSTD/max(estSTD, na.rm=T), apply(estMat, 1, sd, na.rm=T)/max(estSTD, na.rm=T)), 2, rev)
+estSTD <- cbind(estSTD/max(estSTD, na.rm=T), apply(estMat, 1, sd, na.rm=T)/max(estSTD, na.rm=T))
 
 frame()
 plot.window(xlim=c(1,26), ylim=c(0,1))
@@ -383,7 +402,7 @@ estMat <- MatInExtCell
 estMat <- MatES50Cell
 
 estSTD <- grid2lat(estMat = estMat, CellLatMat = CellLatMat)
-estSTD <- apply(estSTD/max(estSTD[,1], na.rm = T), 2, rev)
+estSTD <- estSTD/max(estSTD[,1], na.rm = T)
 
 frame()
 plot.window(xlim=c(1,26), ylim=c(0,1))
@@ -404,10 +423,10 @@ plot.window(xlim=c(1,26), ylim=c(0,1))
 axis(side=2, at=seq(0,1,.2), labels=sprintf("%1.1f", seq(0,1,.2)), las=1, cex.axis=2, lwd=2)
 axis(side=1, at=c(1-0.5,14-0.5,26+0.5), labels=c('65S','0','65N'), cex.axis=2, lwd=2, padj = .5)
 
-for(i in nrow(CellLatMat):1)
+for(i in 1:nrow(CellLatMat))
 {
   rowPos <- (CellLatMat[i,2]+1):(CellLatMat[i,2]+CellLatMat[i,3])
-  points(x=rep(27-i, length(rowPos)), y=estSTD[rowPos], pch=21, bg=color[i], col="black", cex=2.5, lwd=.5)
+  points(x=rep(i, length(rowPos)), y=estSTD[rowPos], pch=21, bg=color[i], col="black", cex=2.5, lwd=.5)
 }
 
 
@@ -416,14 +435,14 @@ for(i in nrow(CellLatMat):1)
 # . Figure 4 ----
 # Open files
 MatRichCelly <- read.table("./Data/SimOutput/RSFD_nat/MatRichCell.txt", h=F, na.strings = -1)
-MatRichCelly <- read.table("./Data/SimOutput/RSFD_nat_Trop99/MatRichCell.txt", h=F, na.strings = -1)
 MatRichCelly <- read.table("./Data/SimOutput/RSFD_nat_Trop79/MatRichCell.txt", h=F, na.strings = -1)
-x <- rowMeans(MatRichCelly, na.rm = T)
+MatRichCelly <- read.table("./Data/SimOutput/RSFD_nat_Trop119/MatRichCell.txt", h=F, na.strings = -1)
 
 # Create color scale
-escala <- cut(x, seq(floor(min(x, na.rm=T)), ceiling(max(x, na.rm=T)), 1))
+x <- rowMeans(MatRichCelly, na.rm = T)
+escala <- cut(x, seq(floor(min(x, na.rm=T)), ceiling(max(x, na.rm=T)), 1), include.lowest=T)
 
-colCode <- numeric(length(AtlGrid@data[,1]))
+colCode <- numeric(length(AtlGrid))
 for(i in 1:length(levels(escala)))
 {
   pos <- which(escala==levels(escala)[i])
@@ -431,10 +450,10 @@ for(i in 1:length(levels(escala)))
 }
 
 # Plot the map
-plot(AtlGrid, col=colCode, border="transparent")
+plot(AtlGridCut, col=colCode, border="transparent", axes=F)
 plot(landCut, col="grey80", border="transparent", add=T)
-plot(as(extent(AtlGrid), "SpatialPolygons"), add=T)
-segments(x0 = extent(AtlGrid)[1], x1 = extent(AtlGrid)[2], y0 = 0, y1 = 0, lty = 2)
+plot(as.polygons(ext(AtlGridCut)), add=T)
+segments(x0 = ext(AtlGridCut)[1], x1 = ext(AtlGridCut)[2], y0 = 0, y1 = 0, lty = 2)
 
 
 # Histograms
@@ -442,23 +461,23 @@ MatRichLaty <- read.table("./Data/SimOutput/RSFD_nat/MatRichLat.txt", h=F, na.st
 MatObsLaty <- read.table("./Data/SimOutput/RSFD_nat/MatObsLat.txt", h=F, na.strings = c(-1,0))
 MatGapsLaty <- read.table("./Data/SimOutput/RSFD_nat/MatGapsLat.txt", h=F, na.strings = -1)
 
-MatRichLaty <- read.table("./Data/SimOutput/RSFD_nat_Trop99/MatRichLat.txt", h=F, na.strings = -1)
-MatObsLaty <- read.table("./Data/SimOutput/RSFD_nat_Trop99/MatObsLat.txt", h=F, na.strings = c(-1,0))
-MatGapsLaty <- read.table("./Data/SimOutput/RSFD_nat_Trop99/MatGapsLat.txt", h=F, na.strings = -1)
-
 MatRichLaty <- read.table("./Data/SimOutput/RSFD_nat_Trop79/MatRichLat.txt", h=F, na.strings = -1)
 MatObsLaty <- read.table("./Data/SimOutput/RSFD_nat_Trop79/MatObsLat.txt", h=F, na.strings = c(-1,0))
 MatGapsLaty <- read.table("./Data/SimOutput/RSFD_nat_Trop79/MatGapsLat.txt", h=F, na.strings = -1)
 
+MatRichLaty <- read.table("./Data/SimOutput/RSFD_nat_Trop119/MatRichLat.txt", h=F, na.strings = -1)
+MatObsLaty <- read.table("./Data/SimOutput/RSFD_nat_Trop119/MatObsLat.txt", h=F, na.strings = c(-1,0))
+MatGapsLaty <- read.table("./Data/SimOutput/RSFD_nat_Trop119/MatGapsLat.txt", h=F, na.strings = -1)
 
-MatRichLatyST <- rowMeans(MatRichLaty)/max(rowMeans(MatObsLaty))
-MatObsLatyST <- rowMeans(MatObsLaty)/max(rowMeans(MatObsLaty))
-ExpectedST <- rowMeans(MatObsLaty+MatGapsLaty)/max(rowMeans(MatObsLaty))
+
+MatRichLatyST <- rowMeans(MatRichLaty)/max(rowMeans(MatObsLaty, na.rm = T))
+MatObsLatyST <- rowMeans(MatObsLaty)/max(rowMeans(MatObsLaty, na.rm = T))
+ExpectedST <- rowMeans(MatObsLaty+MatGapsLaty)/max(rowMeans(MatObsLaty, na.rm = T))
 maxV <- max(MatRichLatyST)
 
-x <- barplot(MatRichLatyST/maxV, col=rgb(.95,.95,.95), space=0, ylim=c(0,1.05), axes=F)
-barplot(ExpectedST/maxV, col=rgb(.8,.8,.8), space=0, axes=F, add=T)
-barplot(MatObsLatyST/maxV, col=rgb(.6,.6,.6), space=0, axes=F, add=T)
+x <- barplot(rev(MatRichLatyST)/maxV, col=rgb(.95,.95,.95), space=0, ylim=c(0,1.05), axes=F)
+barplot(rev(ExpectedST)/maxV, col=rgb(.8,.8,.8), space=0, axes=F, add=T)
+barplot(rev(MatObsLatyST)/maxV, col=rgb(.6,.6,.6), space=0, axes=F, add=T)
 axis(side=1, at=c(x[1]-0.5,mean(x[c(13,14)]),x[26]+0.5), labels=c('65N','0','65S'))
 axis(side=4, at=seq(0,1,.2), labels=sprintf("%1.1f", seq(0,1,.2)), las=0, pos=26+1, lwd=1.5, cex.axis=2, padj=.2)
 
@@ -482,10 +501,10 @@ int_f <- function(x, mu1, mu2, sd1, sd2)
 }
 
 ## Latitude (choose the variable to plot)
-MatRichLat <- read.table("./Data/SimOutput/RSFD_nat_Trop79_seINC/MatRichLat.txt", h=F, na.strings = -1)
-MatChao2Lat <- read.table("./Data/SimOutput/RSFD_nat_Trop79_seINC/MatChao2Lat.txt", h=F, na.strings = -1)
-MatInExtLat <- read.table("./Data/SimOutput/RSFD_nat_Trop79_seINC/MatInExtLat.txt", h=F, na.strings = -1)
-MatES50Lat <- read.table("./Data/SimOutput/RSFD_nat_Trop79_seINC/MatES50Lat.txt", h=F, na.strings = -1)
+MatRichLat <- read.table("./Data/SimOutput/RSFD_nat_Trop119_seINC/MatRichLat.txt", h=F, na.strings = -1)
+MatChao2Lat <- read.table("./Data/SimOutput/RSFD_nat_Trop119_seINC/MatChao2Lat.txt", h=F, na.strings = -1)
+MatInExtLat <- read.table("./Data/SimOutput/RSFD_nat_Trop119_seINC/MatInExtLat.txt", h=F, na.strings = -1)
+MatES50Lat <- read.table("./Data/SimOutput/RSFD_nat_Trop119_seINC/MatES50Lat.txt", h=F, na.strings = -1)
 
 estMat <- MatChao2Lat
 estMat <- MatInExtLat
@@ -493,7 +512,7 @@ estMat <- MatES50Lat
 
 # Plot estimate from first sampling scenario
 estSTD <- estMat[,1]
-estSTD <- apply(cbind(estSTD/max(estSTD, na.rm=T), estMat[,2]/max(estSTD, na.rm=T)), 2, rev)
+estSTD <- cbind(estSTD/max(estSTD, na.rm=T), estMat[,2]/max(estSTD, na.rm=T))
 
 frame()
 plot.window(xlim=c(1,26), ylim=c(0,1))
@@ -502,7 +521,7 @@ axis(side=1, at=c(1-0.5,14-0.5,26+0.5), labels=c('65S','0','65N'), cex.axis=1.5,
 
 refMeanSD <- cbind(rowMeans(MatRichLat), apply(MatRichLat, 1, sd))
 refMeanSD <- refMeanSD/max(refMeanSD[,1])
-polygon(c(.5:25.5, rev(.5:25.5)), c(rev(refMeanSD[,1]+refMeanSD[,2]), refMeanSD[,1]-refMeanSD[,2]), col=rgb(.35,.35,.35,.2, maxColorValue = 1), border=NA)
+polygon(c(.5:25.5, rev(.5:25.5)), c((refMeanSD[,1]+refMeanSD[,2]), rev(refMeanSD[,1]-refMeanSD[,2])), col=rgb(.35,.35,.35,.2, maxColorValue = 1), border=NA)
 
 arrows(1:26, estSTD[,1], 1:26, estSTD[,1]-estSTD[,2],lwd = 1.5, angle = 90,code = 3, length = 0.025)
 lines(estSTD[,1], lwd=2, lty=2)
@@ -549,10 +568,10 @@ for(j in 1:nrow(CellLatMat))
 
 
 ## Grid cell (average)
-MatRichCell <- read.table("./Data/SimOutput/RSFD_nat_Trop79_seINC/MatRichCell.txt", h=F, na.strings = -1)
-MatChao2Cell <- read.table("./Data/SimOutput/RSFD_nat_Trop79_seINC/MatChao2Cell2Lat.txt", h=F, na.strings = -1)
-MatInExtCell <- read.table("./Data/SimOutput/RSFD_nat_Trop79_seINC/MatInExtCell2Lat.txt", h=F, na.strings = -1)
-MatES50Cell <- read.table("./Data/SimOutput/RSFD_nat_Trop79_seINC/MatES50Cell2Lat.txt", h=F, na.strings = -1)
+MatRichCell <- read.table("./Data/SimOutput/RSFD_nat_Trop119_seINC/MatRichCell.txt", h=F, na.strings = -1)
+MatChao2Cell <- read.table("./Data/SimOutput/RSFD_nat_Trop119_seINC/MatChao2Cell2Lat.txt", h=F, na.strings = -1)
+MatInExtCell <- read.table("./Data/SimOutput/RSFD_nat_Trop119_seINC/MatInExtCell2Lat.txt", h=F, na.strings = -1)
+MatES50Cell <- read.table("./Data/SimOutput/RSFD_nat_Trop119_seINC/MatES50Cell2Lat.txt", h=F, na.strings = -1)
 
 # Plot estimate from first sampling scenario
 estMat <- MatChao2Cell
@@ -560,7 +579,7 @@ estMat <- MatInExtCell
 estMat <- MatES50Cell
 
 estSTD <- estMat[,1:2]
-estSTD <- apply(estSTD/max(estSTD[,1], na.rm = T), 2, rev)
+estSTD <- estSTD/max(estSTD[,1], na.rm = T)
 
 frame()
 plot.window(xlim=c(1,26), ylim=c(0,1))
@@ -569,7 +588,7 @@ axis(side=1, at=c(1-0.5,14-0.5,26+0.5), labels=c('65S','0','65N'), cex.axis=1.5,
 
 refData <- grid2lat(estMat = MatRichCell, CellLatMat = CellLatMat)
 refData <- refData/max(refData[,1])
-polygon(c(.5:25.5, rev(.5:25.5)), c(rev(refData[,1]+refData[,2]), refData[,1]-refData[,2]), col=rgb(.35,.35,.35,.2, maxColorValue = 1), border=NA)
+polygon(c(.5:25.5, rev(.5:25.5)), c((refData[,1]+refData[,2]), rev(refData[,1]-refData[,2])), col=rgb(.35,.35,.35,.2, maxColorValue = 1), border=NA)
 
 arrows(1:26, estSTD[,1], 1:26, estSTD[,1]-estSTD[,2], lwd=2.5, angle=90, code=3, length=0.03)
 lines(estSTD[,1], lwd=2, lty=2)
@@ -702,17 +721,17 @@ points(OphiSC_sg[,1], x = .5:25.5, pch=21, bg="red", cex=1)
 ## Plot cell
 ophiAtlantSG <- unique(ophiAtlant[,1:3])
 ophiPoints <- ophiAtlantSG
-coordinates(ophiPoints) <- ~decimalLongitude+decimalLatitude
+ophiPoints <- vect(ophiPoints, geom=c("decimalLongitude","decimalLatitude"), crs='epsg:4326')
 
 SampGrid <- AtlGrid
 SampCell <- data.frame(SC=rep(NA,length(SampGrid)), Lat=rep(NA,length(SampGrid)))
 for(i in 1:length(SampGrid))
 {
   # For each grid cell...
-  singleCell <- spPolygons(SampGrid@polygons[[i]]@Polygons[[1]]@coords)
+  singleCell <- SampGrid[i,]
   
   # Find all of its sampling events 
-  ii <- which(!is.na(over(x = ophiPoints, singleCell)))
+  ii <- relate(ophiPoints, singleCell, relation='intersects', pairs=T)[,1]
   if(length(ii)>0)
   {
     tempMat <- unique(ophiAtlantSG[ii,])
@@ -753,15 +772,15 @@ plot.window(xlim=c(1,26), ylim=c(0,1))
 axis(side=1, at=c(1-0.5,14-0.5,26+0.5), labels=c('65S','0','65N'), cex.axis=1.4, lwd=2, padj = .5)
 axis(side=2, at=seq(0,1,.2), labels=sprintf("%1.1f", seq(0,1,.2)), las=1, cex.axis=1.4, lwd=2)
 
-polygon(c(.5:9.5, rev(.5:9.5)), c(OphiSCCell[1:10,1]+OphiSCCell[1:10,2], rev(OphiSCCell[1:10,1]-OphiSCCell[1:10,2])), col=rgb(255,240,216, maxColorValue = 255), border=NA)
-polygon(c((11.5:25.5), rev(11.5:25.5)), c(OphiSCCell[12:26,1]+OphiSCCell[12:26,2], rev(OphiSCCell[12:26,1]-OphiSCCell[12:26,2])), col=rgb(255,240,216, maxColorValue = 255), border=NA)
+polygon(c(.5:8.5, rev(.5:8.5)), c(OphiSCCell[1:9,1]+OphiSCCell[1:9,2], rev(OphiSCCell[1:9,1]-OphiSCCell[1:9,2])), col=rgb(255,240,216, maxColorValue = 255), border=NA)
+polygon(c((10.5:25.5), rev(10.5:25.5)), c(OphiSCCell[11:26,1]+OphiSCCell[11:26,2], rev(OphiSCCell[11:26,1]-OphiSCCell[11:26,2])), col=rgb(255,240,216, maxColorValue = 255), border=NA)
 lines(OphiSCCell[,1], x = .5:25.5, lty=2)
 points(OphiSCCell[,1], x = .5:25.5, pch=21, bg=rgb(253,179,56, maxColorValue = 255), col="black", cex=2)
 
 lines(OphiSCCell_sg[,1], x = .5:25.5, lty=2, col='red')
 arrows(.5:25.5,OphiSCCell_sg[,1]+OphiSCCell_sg[,2],.5:25.5,OphiSCCell_sg[,1]-OphiSCCell_sg[,2],lwd = 1.5, angle = 90,code = 3, length = 0.05, col='grey30')
 points(OphiSCCell_sg[,1], x = .5:25.5, pch=21, bg="red", cex=1)
-#cor(OphiSCCell[,1], OphiSCCell_sg[,1], use='complete.obs') #0.9366629
+#cor(OphiSCCell[,1], OphiSCCell_sg[,1], use='complete.obs') #0.9558316
 
 
 
@@ -817,7 +836,7 @@ estMat <- MatInExtLat
 estMat <- MatES50Lat
 
 estSTD <- rowMeans(estMat, na.rm=T)
-estSTD <- apply(cbind(estSTD/max(estSTD, na.rm=T), apply(estMat, 1, sd, na.rm=T)/max(estSTD, na.rm=T)), 2, rev)
+estSTD <- cbind(estSTD/max(estSTD, na.rm=T), apply(estMat, 1, sd, na.rm=T)/max(estSTD, na.rm=T))
 
 frame()
 plot.window(xlim=c(1,26), ylim=c(0,1))
@@ -841,7 +860,7 @@ estMat <- MatInExtCell
 estMat <- MatES50Cell
 
 estSTD <- grid2lat(estMat = estMat, CellLatMat = CellLatMat)
-estSTD <- apply(estSTD/max(estSTD[,1], na.rm = T), 2, rev)
+estSTD <- estSTD/max(estSTD[,1], na.rm = T)
 
 frame()
 plot.window(xlim=c(1,26), ylim=c(0,1))
@@ -862,10 +881,10 @@ plot.window(xlim=c(1,26), ylim=c(0,1))
 axis(side=2, at=seq(0,1,.2), labels=sprintf("%1.1f", seq(0,1,.2)), las=1, cex.axis=2, lwd=2)
 axis(side=1, at=c(1-0.5,14-0.5,26+0.5), labels=c('65S','0','65N'), cex.axis=2, lwd=2, padj = .5)
 
-for(i in nrow(CellLatMat):1)
+for(i in 1:nrow(CellLatMat))
 {
   rowPos <- (CellLatMat[i,2]+1):(CellLatMat[i,2]+CellLatMat[i,3])
-  points(x=rep(27-i, length(rowPos)), y=estSTD[rowPos], pch=21, bg=color[i], col="black", cex=2.5, lwd=.5)
+  points(x=rep(i, length(rowPos)), y=estSTD[rowPos], pch=21, bg=color[i], col="black", cex=2.5, lwd=.5)
 }
 
 
@@ -891,16 +910,14 @@ for(i in 1:length(species))
   {
     # Create a convex hull polygon
     ch <- chull(sp1[,2:3])
-    coords <- sp1[c(ch, ch[1]),2:3]
-    poly <- SpatialPolygons(list(Polygons(list(Polygon(coords)),1)))
-    crs(poly) <- crs(AtlGrid)
+    coords <- sp1[ch,2:3]
+    poly <- vect(as.matrix(coords), "polygons", crs='epsg:4326')
     
     # Find the grid cells within the area potentially occupied by the species
-    ii <- over(AtlGrid, poly)
-    ii <- which(!is.na(ii))
+    ii <- relate(AtlGrid, poly, relation='intersects', pairs=T)[,1]
     
-    # Count the number of cells (1 if occurrence outside the grid)
-    rangeSize[i] <- ifelse(length(ii)==0, 1, length(ii))
+    # Count the number of cells
+    rangeSize[i] <- length(ii)
   }
   else
   {
@@ -923,7 +940,7 @@ a <- boxplot(rangeSize, horizontal = F, add=T, col="deepskyblue", outpch=21, out
 alfa <- 1/100
 for(i in 1:100)
 {
-  x <- ceiling(rbeta(675,.3,5)*396)
+  x <- ceiling(rbeta(675,.3,5)*length(AtlGrid))
   
   b <- boxplot(x, horizontal = F, at=2, add=T, frame.plot=F, axes=F, col="deepskyblue", outbg="deepskyblue", plot=F)
   boxplot(x, horizontal = F, at=2.5, add=T, frame.plot=F, axes=F, outline=F, col=rgb(red = .5, green = .5, blue = .5, alpha = alfa), border=rgb(red = 0, green = 0, blue = 0, alpha = alfa), medcol=rgb(red = 1, green = 0, blue = 0, alpha = alfa))
@@ -932,7 +949,7 @@ for(i in 1:100)
 
 for(i in 1:100)
 {
-  x <- ceiling(rbeta(675,3,9)*396)
+  x <- ceiling(rbeta(675,3,9)*length(AtlGrid))
   
   b <- boxplot(x, horizontal = F, at=3.5, add=T, frame.plot=F, axes=F, col="deepskyblue", outbg="deepskyblue", plot=F)
   boxplot(x, horizontal = F, at=3.5, add=T, frame.plot=F, axes=F, outline=F, col=rgb(red = .5, green = .5, blue = .5, alpha = alfa), border=rgb(red = 0, green = 0, blue = 0, alpha = alfa), medcol=rgb(red = 1, green = 0, blue = 0, alpha = alfa))
@@ -948,18 +965,18 @@ for(i in 1:100)
 MatRichCelly <- read.table("./Data/SimOutput/RSFD_nat/MatRichCell.txt", h=F, na.strings = -1)
 MatObsCelly <- read.table("./Data/SimOutput/RSFD_nat/MatObsCell.txt", h=F, na.strings = c(-1,0))
 
-MatRichCelly <- read.table("./Data/SimOutput/RSFD_nat_Trop99/MatRichCell.txt", h=F, na.strings = -1)
-MatObsCelly <- read.table("./Data/SimOutput/RSFD_nat_Trop99/MatObsCell.txt", h=F, na.strings = c(-1,0))
-
 MatRichCelly <- read.table("./Data/SimOutput/RSFD_nat_Trop79/MatRichCell.txt", h=F, na.strings = -1)
 MatObsCelly <- read.table("./Data/SimOutput/RSFD_nat_Trop79/MatObsCell.txt", h=F, na.strings = c(-1,0))
+
+MatRichCelly <- read.table("./Data/SimOutput/RSFD_nat_Trop119/MatRichCell.txt", h=F, na.strings = -1)
+MatObsCelly <- read.table("./Data/SimOutput/RSFD_nat_Trop119/MatObsCell.txt", h=F, na.strings = c(-1,0))
 
 avRichy <- grid2lat(estMat = MatRichCelly, CellLatMat = CellLatMat)[,1]
 avObsy <- grid2lat(estMat = MatObsCelly, CellLatMat = CellLatMat)[,1]
 maxV <- max(avRichy/max(avObsy))
 
-x <- barplot((rev(avRichy)/max(avObsy))/maxV, col=rgb(.95,.95,.95), space=0, ylim=c(0,1), axes=F)
-barplot((rev(avObsy)/max(avObsy))/maxV, col=rgb(.6,.6,.6), space=0, axes=F, add=T)
+x <- barplot((avRichy/max(avObsy))/maxV, col=rgb(.95,.95,.95), space=0, ylim=c(0,1), axes=F)
+barplot((avObsy/max(avObsy))/maxV, col=rgb(.6,.6,.6), space=0, axes=F, add=T)
 axis(side=1, at=c(x[1]-0.5,mean(x[c(13,14)]),x[26]+0.5), labels=c('65S','0','65N'), cex.axis=1.4)
 axis(side=2, at=seq(0,1,.2), labels=sprintf("%1.1f", seq(0,1,.2)), las=1, pos=-.5, lwd=1.5, cex.axis=1.4)
 
@@ -971,15 +988,14 @@ points(x = (1:26)-.5, (SPrichCell[,1]/max(SPrichCell[,1]))/maxV, pch=21, bg=rgb(
 SCLaty <- read.table("./Data/SimOutput/RSFD_nat/MatCoverageLat.txt", h=F, na.strings = -1)
 SCCelly <- read.table("./Data/SimOutput/RSFD_nat/MatCoverageCell.txt", h=F, na.strings = -1)
 
-SCLaty <- read.table("./Data/SimOutput/RSFD_nat_Trop99/MatCoverageLat.txt", h=F, na.strings = -1)
-SCCelly <- read.table("./Data/SimOutput/RSFD_nat_Trop99/MatCoverageCell.txt", h=F, na.strings = -1)
-
 SCLaty <- read.table("./Data/SimOutput/RSFD_nat_Trop79/MatCoverageLat.txt", h=F, na.strings = -1)
 SCCelly <- read.table("./Data/SimOutput/RSFD_nat_Trop79/MatCoverageCell.txt", h=F, na.strings = -1)
 
+SCLaty <- read.table("./Data/SimOutput/RSFD_nat_Trop119/MatCoverageLat.txt", h=F, na.strings = -1)
+SCCelly <- read.table("./Data/SimOutput/RSFD_nat_Trop119/MatCoverageCell.txt", h=F, na.strings = -1)
+
 
 meanSD1 <- cbind(rowMeans(SCLaty, na.rm=T), apply(SCLaty, 1, sd, na.rm=T))
-meanSD1 <- apply(meanSD1, 2, rev)
 
 frame()
 plot.window(xlim=c(1,26), ylim=c(0,1))
@@ -997,19 +1013,18 @@ points(OphiSC[,1], x = x, pch=21, bg=rgb(2,81,150, maxColorValue = 255), col="bl
 
 ## Completeness Alpha
 meanSD2 <- grid2lat(estMat = SCCelly, CellLatMat = CellLatMat)
-meanSD2 <- apply(meanSD2, 2, rev)
 
 frame()
 plot.window(xlim=c(1,26), ylim=c(0,1))
 axis(side=1, at=c(x[1]-0.5,mean(x[c(13,14)]),x[26]+0.5), labels=c('65S','0','65N'), cex.axis=1.4)
 axis(side=2, at=seq(0,1,.2), labels=sprintf("%1.1f", seq(0,1,.2)), las=1, pos=-.5, lwd=1.5, cex.axis=1.4)
 
-polygon(c(.5:25.5, rev(.5:25.5)), c(meanSD2[,1]+meanSD2[,2], rev(meanSD2[,1]-meanSD2[,2])), col=rgb(.35,.35,.35,.2, maxColorValue = 1), border=NA)
+polygon(c(.5:25.5, rev(.5:25.5)), c((meanSD2[,1]+meanSD2[,2]), rev(meanSD2[,1]-meanSD2[,2])), col=rgb(.35,.35,.35,.2, maxColorValue = 1), border=NA)
 lines(meanSD2[,1], x = x, lty=2)
 points(meanSD2[,1], x = x, pch=22, bg=rgb(.35,.35,.35, maxColorValue = 1), col="black", cex=2)
 
-polygon(c(.5:9.5, rev(.5:9.5)), c(OphiSCCell[1:10,1]+OphiSCCell[1:10,2], rev(OphiSCCell[1:10,1]-OphiSCCell[1:10,2])), col=rgb(253,179,56,50, maxColorValue = 255), border=NA)
-polygon(c(11.5:25.5, rev(11.5:25.5)), c(OphiSCCell[12:26,1]+OphiSCCell[12:26,2], rev(OphiSCCell[12:26,1]-OphiSCCell[12:26,2])), col=rgb(253,179,56,50, maxColorValue = 255), border=NA)
+polygon(c(.5:8.5, rev(.5:8.5)), c((OphiSCCell[1:9,1]+OphiSCCell[1:9,2]), rev(OphiSCCell[1:9,1]-OphiSCCell[1:9,2])), col=rgb(253,179,56,50, maxColorValue = 255), border=NA)
+polygon(c(10.5:25.5, rev(10.5:25.5)), c((OphiSCCell[11:26,1]+OphiSCCell[11:26,2]), rev(OphiSCCell[11:26,1]-OphiSCCell[11:26,2])), col=rgb(253,179,56,50, maxColorValue = 255), border=NA)
 lines(OphiSCCell[,1], x = x, lty=2)
 points(OphiSCCell[,1], x = x, pch=21, bg=rgb(253,179,56, maxColorValue = 255), col="black", cex=1.5)
 
@@ -1023,13 +1038,13 @@ color <- c(myRd(7)[-7],'#ffdb58', myBu(7)[-1]) #e5e5ab #ffdb58
 color <- c(rev(color), color)
 
 ## Latitude (choose the variable to plot)
-MatCoverageLat <- read.table("./Data/SimOutput/RSFD_nat_Trop79_seINC/MatCoverageLat.txt", h=F, na.strings = -1)
+MatCoverageLat <- read.table("./Data/SimOutput/RSFD_nat_Trop119_seINC/MatCoverageLat.txt", h=F, na.strings = -1)
 estMat <- MatCoverageLat
 
-MatCoverageCell <- read.table("./Data/SimOutput/RSFD_nat_Trop79_seINC/MatCoverageCell2Lat.txt", h=F, na.strings = -1)
+MatCoverageCell <- read.table("./Data/SimOutput/RSFD_nat_Trop119_seINC/MatCoverageCell2Lat.txt", h=F, na.strings = -1)
 estMat <- MatCoverageCell
 
-MatGapsLat <- read.table("./Data/SimOutput/RSFD_nat_Trop79_seINC/MatGapsLat.txt", h=F, na.strings = -1)
+MatGapsLat <- read.table("./Data/SimOutput/RSFD_nat_Trop119_seINC/MatGapsLat.txt", h=F, na.strings = -1)
 estMat <- MatGapsLat/max(MatGapsLat[,1], na.rm = T)
 
 # Standardize variable and optimize the plot order based on changes between sampling scenarios
@@ -1055,7 +1070,7 @@ format(apply(meanSTD, 2, max, na.rm=T)*100, scientific = F, digits = 3)
 
 
 ## Grid cell
-MatCoverageCell <- read.table("./Data/SimOutput/RSFD_nat_Trop79_seINC/MatCoverageCell.txt", h=F, na.strings = -1)
+MatCoverageCell <- read.table("./Data/SimOutput/RSFD_nat_Trop119_seINC/MatCoverageCell.txt", h=F, na.strings = -1)
 estMat <- MatCoverageCell
 meanSTD <- estMat[,seq(1, ncol(estMat), 3)]
 
@@ -1084,19 +1099,19 @@ format(apply(meanSTD, 2, min, na.rm=T)*100, scientific = F, digits = 3)
 # . Figure S8 ----
 
 ### PartA: here and script '2 - InputMatrices.R'
-MatRichCelly <- read.table("./Data/SimOutput/RSFD_nat_Trop79/MatRichCell.txt", h=F, na.strings = -1)
-MatObsCelly <- read.table("./Data/SimOutput/RSFD_nat_Trop79/MatObsCell.txt", h=F, na.strings = c(-1,0))
+MatRichCelly <- read.table("./Data/SimOutput/RSFD_nat_Trop119/MatRichCell.txt", h=F, na.strings = -1)
+MatObsCelly <- read.table("./Data/SimOutput/RSFD_nat_Trop119/MatObsCell.txt", h=F, na.strings = c(-1,0))
 x <- rowMeans(MatObsCelly, na.rm = T)
 
-MatRichCelly <- read.table("./Data/SimOutput/RSFD_nat_Trop79_seConc/MatRichCell.txt", h=F, na.strings = -1)
-MatObsCelly <- read.table("./Data/SimOutput/RSFD_nat_Trop79_seConc/MatObsCell.txt", h=F, na.strings = c(-1,0))
+MatRichCelly <- read.table("./Data/SimOutput/RSFD_nat_Trop119_seConc/MatRichCell.txt", h=F, na.strings = -1)
+MatObsCelly <- read.table("./Data/SimOutput/RSFD_nat_Trop119_seConc/MatObsCell.txt", h=F, na.strings = c(-1,0))
 x <- rowMeans(MatObsCelly, na.rm = T)
 
 # Create color scale
-escala <- cut(x, seq(floor(min(x, na.rm=T)/5)*5, ceiling(max(x, na.rm=T)/5)*5, 5))
+escala <- cut(x, seq(floor(min(x, na.rm=T)/5)*5, ceiling(max(x, na.rm=T)/5)*5, 5), include.lowest=T)
 levels(escala)
 
-colCode <- numeric(length(AtlGrid@data[,1]))
+colCode <- numeric(length(AtlGrid))
 for(i in 1:length(levels(escala)))
 {
   pos <- which(escala==levels(escala)[i])
@@ -1104,32 +1119,32 @@ for(i in 1:length(levels(escala)))
 }
 
 # Plot the map
-plot(AtlGrid, col=colCode, border="transparent")
-plot(AtlGrid[colCode=='0',], border="black", lwd=.2, add=T)
+plot(AtlGridCut, col=colCode, border="transparent", axes=F)
+plot(AtlGridCut[colCode=='0',], border="black", lwd=.2, add=T)
 plot(landCut, col="grey80", border="transparent", add=T)
-plot(as(extent(AtlGrid), "SpatialPolygons"), add=T)
-segments(x0 = extent(AtlGrid)[1], x1 = extent(AtlGrid)[2], y0 = 0, y1 = 0, lty = 2)
+plot(as.polygons(ext(AtlGridCut)), add=T)
+segments(x0 = ext(AtlGridCut)[1], x1 = ext(AtlGridCut)[2], y0 = 0, y1 = 0, lty = 2)
 
 
 ### PartB:
 ## Gamma diversity
-MatRichLaty <- read.table("./Data/SimOutput/RSFD_nat_Trop79/MatRichLat.txt", h=F, na.strings = -1)
-MatObsLaty <- read.table("./Data/SimOutput/RSFD_nat_Trop79/MatObsLat.txt", h=F, na.strings = c(-1,0))
-MatGapsLaty <- read.table("./Data/SimOutput/RSFD_nat_Trop79/MatGapsLat.txt", h=F, na.strings = -1)
+MatRichLaty <- read.table("./Data/SimOutput/RSFD_nat_Trop119/MatRichLat.txt", h=F, na.strings = -1)
+MatObsLaty <- read.table("./Data/SimOutput/RSFD_nat_Trop119/MatObsLat.txt", h=F, na.strings = c(-1,0))
+MatGapsLaty <- read.table("./Data/SimOutput/RSFD_nat_Trop119/MatGapsLat.txt", h=F, na.strings = -1)
 
-MatRichLaty <- read.table("./Data/SimOutput/RSFD_nat_Trop79_seConc/MatRichLat.txt", h=F, na.strings = -1)
-MatObsLaty <- read.table("./Data/SimOutput/RSFD_nat_Trop79_seConc/MatObsLat.txt", h=F, na.strings = c(-1,0))
-MatGapsLaty <- read.table("./Data/SimOutput/RSFD_nat_Trop79_seConc/MatGapsLat.txt", h=F, na.strings = -1)
+MatRichLaty <- read.table("./Data/SimOutput/RSFD_nat_Trop119_seConc/MatRichLat.txt", h=F, na.strings = -1)
+MatObsLaty <- read.table("./Data/SimOutput/RSFD_nat_Trop119_seConc/MatObsLat.txt", h=F, na.strings = c(-1,0))
+MatGapsLaty <- read.table("./Data/SimOutput/RSFD_nat_Trop119_seConc/MatGapsLat.txt", h=F, na.strings = -1)
 
 
-MatRichLatyST <- rowMeans(MatRichLaty)/max(rowMeans(MatObsLaty))
-MatObsLatyST <- rowMeans(MatObsLaty)/max(rowMeans(MatObsLaty))
-ExpectedST <- rowMeans(MatObsLaty+MatGapsLaty)/max(rowMeans(MatObsLaty))
+MatRichLatyST <- rowMeans(MatRichLaty)/max(rowMeans(MatObsLaty, na.rm = T))
+MatObsLatyST <- rowMeans(MatObsLaty, na.rm = T)/max(rowMeans(MatObsLaty, na.rm = T))
+ExpectedST <- rowMeans(MatObsLaty+MatGapsLaty)/max(rowMeans(MatObsLaty, na.rm = T))
 maxV <- max(MatRichLatyST)
 
-x <- barplot(rev(MatRichLatyST)/maxV, col=rgb(.95,.95,.95), space=0, ylim=c(0,1.05), axes=F)
-barplot(rev(ExpectedST)/maxV, col=rgb(.8,.8,.8), space=0, axes=F, add=T)
-barplot(rev(MatObsLatyST)/maxV, col=rgb(.6,.6,.6), space=0, axes=F, add=T)
+x <- barplot(MatRichLatyST/maxV, col=rgb(.95,.95,.95), space=0, ylim=c(0,1.05), axes=F)
+barplot(ExpectedST/maxV, col=rgb(.8,.8,.8), space=0, axes=F, add=T)
+barplot(MatObsLatyST/maxV, col=rgb(.6,.6,.6), space=0, axes=F, add=T)
 axis(side=1, at=c(x[1]-0.5,mean(x[c(13,14)]),x[26]+0.5), labels=c('65S','0','65N'), cex.axis=1.4)
 axis(side=2, at=seq(0,1,.2), labels=sprintf("%1.1f", seq(0,1,.2)), las=1, pos=-.5, lwd=1.5, cex.axis=1.4)
 
@@ -1138,19 +1153,19 @@ points(x = (1:26)-.5, (SPrich/max(SPrich))/maxV, pch=21, bg=rgb(.35,.35,.35, max
 
 
 ## Alpha diversity
-MatRichCelly <- read.table("./Data/SimOutput/RSFD_nat_Trop79/MatRichCell.txt", h=F, na.strings = -1)
-MatObsCelly <- read.table("./Data/SimOutput/RSFD_nat_Trop79/MatObsCell.txt", h=F, na.strings = c(-1,0))
+MatRichCelly <- read.table("./Data/SimOutput/RSFD_nat_Trop119/MatRichCell.txt", h=F, na.strings = -1)
+MatObsCelly <- read.table("./Data/SimOutput/RSFD_nat_Trop119/MatObsCell.txt", h=F, na.strings = c(-1,0))
 
-MatRichCelly <- read.table("./Data/SimOutput/RSFD_nat_Trop79_seConc/MatRichCell.txt", h=F, na.strings = -1)
-MatObsCelly <- read.table("./Data/SimOutput/RSFD_nat_Trop79_seConc/MatObsCell.txt", h=F, na.strings = c(-1,0))
+MatRichCelly <- read.table("./Data/SimOutput/RSFD_nat_Trop119_seConc/MatRichCell.txt", h=F, na.strings = -1)
+MatObsCelly <- read.table("./Data/SimOutput/RSFD_nat_Trop119_seConc/MatObsCell.txt", h=F, na.strings = c(-1,0))
 
 
 avRichy <- grid2lat(estMat = MatRichCelly, CellLatMat = CellLatMat)[,1]
 avObsy <- grid2lat(estMat = MatObsCelly, CellLatMat = CellLatMat)[,1]
 maxV <- max(avRichy/max(avObsy))
 
-x <- barplot((rev(avRichy)/max(avObsy))/maxV, col=rgb(.95,.95,.95), space=0, ylim=c(0,1), axes=F)
-barplot((rev(avObsy)/max(avObsy))/maxV, col=rgb(.6,.6,.6), space=0, axes=F, add=T)
+x <- barplot((avRichy/max(avObsy))/maxV, col=rgb(.95,.95,.95), space=0, ylim=c(0,1), axes=F)
+barplot((avObsy/max(avObsy))/maxV, col=rgb(.6,.6,.6), space=0, axes=F, add=T)
 axis(side=1, at=c(x[1]-0.5,mean(x[c(13,14)]),x[26]+0.5), labels=c('65S','0','65N'), cex.axis=1.4)
 axis(side=2, at=seq(0,1,.2), labels=sprintf("%1.1f", seq(0,1,.2)), las=1, pos=-.5, lwd=1.5, cex.axis=1.4)
 
@@ -1159,11 +1174,11 @@ points(x = (1:26)-.5, (SPrichCell[,1]/max(SPrichCell[,1]))/maxV, pch=21, bg=rgb(
 
 
 ## Completeness
-SCLaty <- read.table("./Data/SimOutput/RSFD_nat_Trop79/MatCoverageLat.txt", h=F, na.strings = -1)
-SCCelly <- read.table("./Data/SimOutput/RSFD_nat_Trop79/MatCoverageCell.txt", h=F, na.strings = -1)
+SCLaty <- read.table("./Data/SimOutput/RSFD_nat_Trop119/MatCoverageLat.txt", h=F, na.strings = -1)
+SCCelly <- read.table("./Data/SimOutput/RSFD_nat_Trop119/MatCoverageCell.txt", h=F, na.strings = -1)
 
-SCLaty <- read.table("./Data/SimOutput/RSFD_nat_Trop79_seConc/MatCoverageLat.txt", h=F, na.strings = -1)
-SCCelly <- read.table("./Data/SimOutput/RSFD_nat_Trop79_seConc/MatCoverageCell.txt", h=F, na.strings = -1)
+SCLaty <- read.table("./Data/SimOutput/RSFD_nat_Trop119_seConc/MatCoverageLat.txt", h=F, na.strings = -1)
+SCCelly <- read.table("./Data/SimOutput/RSFD_nat_Trop119_seConc/MatCoverageCell.txt", h=F, na.strings = -1)
 
 # Gamma
 meanSD1 <- cbind(rowMeans(SCLaty, na.rm=T), apply(SCLaty, 1, sd, na.rm=T))
@@ -1172,9 +1187,9 @@ plot.window(xlim=c(1,26), ylim=c(0,1))
 axis(side=1, at=c(x[1]-0.5,mean(x[c(13,14)]),x[26]+0.5), labels=c('65S','0','65N'), cex.axis=1.4)
 axis(side=2, at=seq(0,1,.2), labels=sprintf("%1.1f", seq(0,1,.2)), las=1, pos=-.5, lwd=1.5, cex.axis=1.4)
 
-polygon(c(.5:25.5, rev(.5:25.5)), c(rev(meanSD1[,1]+meanSD1[,2]), meanSD1[,1]-meanSD1[,2]), col=rgb(.35,.35,.35,.2, maxColorValue = 1), border=NA)
-lines(rev(meanSD1[,1]), x = x, lty=2)
-points(rev(meanSD1[,1]), x = x, pch=22, bg=rgb(.35,.35,.35, maxColorValue = 1), col="black", cex=2)
+polygon(c(.5:25.5, rev(.5:25.5)), c((meanSD1[,1]+meanSD1[,2]), rev(meanSD1[,1]-meanSD1[,2])), col=rgb(.35,.35,.35,.2, maxColorValue = 1), border=NA)
+lines(meanSD1[,1], x = x, lty=2)
+points(meanSD1[,1], x = x, pch=22, bg=rgb(.35,.35,.35, maxColorValue = 1), col="black", cex=2)
 
 polygon(c(.5:25.5, rev(.5:25.5)), c(OphiSC[,3], rev(OphiSC[,2])), col=rgb(2,81,150,50, maxColorValue = 255), border=NA)
 lines(OphiSC[,1], x = x, lty=2)
@@ -1182,7 +1197,6 @@ points(OphiSC[,1], x = x, pch=21, bg=rgb(2,81,150, maxColorValue = 255), col="bl
 
 # Alpha
 meanSD2 <- grid2lat(estMat = SCCelly, CellLatMat = CellLatMat)
-meanSD2 <- apply(meanSD2, 2, rev)
 
 frame()
 plot.window(xlim=c(1,26), ylim=c(0,1))
@@ -1194,8 +1208,8 @@ lines(meanSD2[,1], x = x, lty=2)
 points(meanSD2[,1], x = x, pch=22, bg=rgb(.35,.35,.35, maxColorValue = 1), col="black", cex=2)
 
 which(is.na(OphiSCCell[,2]))
-polygon(c(.5:9.5, rev(.5:9.5)), c(OphiSCCell[1:10,1]+OphiSCCell[1:10,2], rev(OphiSCCell[1:10,1]-OphiSCCell[1:10,2])), col=rgb(253,179,56,50, maxColorValue = 255), border=NA)
-polygon(c(11.5:25.5, rev(11.5:25.5)), c(OphiSCCell[12:26,1]+OphiSCCell[12:26,2], rev(OphiSCCell[12:26,1]-OphiSCCell[12:26,2])), col=rgb(253,179,56,50, maxColorValue = 255), border=NA)
+polygon(c(.5:8.5, rev(.5:8.5)), c(OphiSCCell[1:9,1]+OphiSCCell[1:9,2], rev(OphiSCCell[1:9,1]-OphiSCCell[1:9,2])), col=rgb(253,179,56,50, maxColorValue = 255), border=NA)
+polygon(c(10.5:25.5, rev(10.5:25.5)), c(OphiSCCell[11:26,1]+OphiSCCell[11:26,2], rev(OphiSCCell[11:26,1]-OphiSCCell[11:26,2])), col=rgb(253,179,56,50, maxColorValue = 255), border=NA)
 lines(OphiSCCell[,1], x = x, lty=2)
 points(OphiSCCell[,1], x = x, pch=21, bg=rgb(253,179,56, maxColorValue = 255), col="black", cex=1.5)
 
@@ -1214,10 +1228,10 @@ int_f <- function(x, mu1, mu2, sd1, sd2)
 }
 
 ## Latitude (choose the variable to plot)
-MatRichLat <- read.table("./Data/SimOutput/RSFD_nat_Trop79_seConc_seINC/MatRichLat.txt", h=F, na.strings = -1)
-MatChao2Lat <- read.table("./Data/SimOutput/RSFD_nat_Trop79_seConc_seINC/MatChao2Lat.txt", h=F, na.strings = -1)
-MatInExtLat <- read.table("./Data/SimOutput/RSFD_nat_Trop79_seConc_seINC/MatInExtLat.txt", h=F, na.strings = -1)
-MatES50Lat <- read.table("./Data/SimOutput/RSFD_nat_Trop79_seConc_seINC/MatES50Lat.txt", h=F, na.strings = -1)
+MatRichLat <- read.table("./Data/SimOutput/RSFD_nat_Trop119_seConc_seINC/MatRichLat.txt", h=F, na.strings = -1)
+MatChao2Lat <- read.table("./Data/SimOutput/RSFD_nat_Trop119_seConc_seINC/MatChao2Lat.txt", h=F, na.strings = -1)
+MatInExtLat <- read.table("./Data/SimOutput/RSFD_nat_Trop119_seConc_seINC/MatInExtLat.txt", h=F, na.strings = -1)
+MatES50Lat <- read.table("./Data/SimOutput/RSFD_nat_Trop119_seConc_seINC/MatES50Lat.txt", h=F, na.strings = -1)
 
 estMat <- MatChao2Lat
 estMat <- MatInExtLat
@@ -1225,7 +1239,7 @@ estMat <- MatES50Lat
 
 # Plot estimate from first sampling scenario
 estSTD <- estMat[,1]
-estSTD <- apply(cbind(estSTD/max(estSTD, na.rm=T), estMat[,2]/max(estSTD, na.rm=T)), 2, rev)
+estSTD <- cbind(estSTD/max(estSTD, na.rm=T), estMat[,2]/max(estSTD, na.rm=T))
 
 frame()
 plot.window(xlim=c(1,26), ylim=c(0,1))
@@ -1234,7 +1248,7 @@ axis(side=1, at=c(1-0.5,14-0.5,26+0.5), labels=c('65S','0','65N'), cex.axis=2, l
 
 refMeanSD <- cbind(rowMeans(MatRichLat), apply(MatRichLat, 1, sd))
 refMeanSD <- refMeanSD/max(refMeanSD[,1])
-polygon(c(.5:25.5, rev(.5:25.5)), c(rev(refMeanSD[,1]+refMeanSD[,2]), refMeanSD[,1]-refMeanSD[,2]), col=rgb(222,222,222, maxColorValue = 255), border=NA)
+polygon(c(.5:25.5, rev(.5:25.5)), c((refMeanSD[,1]+refMeanSD[,2]), rev(refMeanSD[,1]-refMeanSD[,2])), col=rgb(222,222,222, maxColorValue = 255), border=NA)
 
 arrows(1:26, estSTD[,1], 1:26, estSTD[,1]-estSTD[,2],lwd = 1.5, angle = 90,code = 3, length = 0.025)
 lines(estSTD[,1], lwd=2, lty=2)
@@ -1281,10 +1295,10 @@ for(j in 1:nrow(CellLatMat))
 
 
 ## Grid cell (average)
-MatRichCell <- read.table("./Data/SimOutput/RSFD_nat_Trop79_seConc_seINC/MatRichCell.txt", h=F, na.strings = -1)
-MatChao2Cell <- read.table("./Data/SimOutput/RSFD_nat_Trop79_seConc_seINC/MatChao2Cell2Lat.txt", h=F, na.strings = -1)
-MatInExtCell <- read.table("./Data/SimOutput/RSFD_nat_Trop79_seConc_seINC/MatInExtCell2Lat.txt", h=F, na.strings = -1)
-MatES50Cell <- read.table("./Data/SimOutput/RSFD_nat_Trop79_seConc_seINC/MatES50Cell2Lat.txt", h=F, na.strings = -1)
+MatRichCell <- read.table("./Data/SimOutput/RSFD_nat_Trop119_seConc_seINC/MatRichCell.txt", h=F, na.strings = -1)
+MatChao2Cell <- read.table("./Data/SimOutput/RSFD_nat_Trop119_seConc_seINC/MatChao2Cell2Lat.txt", h=F, na.strings = -1)
+MatInExtCell <- read.table("./Data/SimOutput/RSFD_nat_Trop119_seConc_seINC/MatInExtCell2Lat.txt", h=F, na.strings = -1)
+MatES50Cell <- read.table("./Data/SimOutput/RSFD_nat_Trop119_seConc_seINC/MatES50Cell2Lat.txt", h=F, na.strings = -1)
 
 # Plot estimate from first sampling scenario
 estMat <- MatChao2Cell
@@ -1293,7 +1307,7 @@ estMat <- MatES50Cell
 
 estSTD <- estMat[,1:2]
 estSTD[estSTD==0] <- NA
-estSTD <- apply(estSTD/max(estSTD[,1], na.rm = T), 2, rev)
+estSTD <- estSTD/max(estSTD[,1], na.rm = T)
 
 frame()
 plot.window(xlim=c(1,26), ylim=c(0,1))
@@ -1302,7 +1316,7 @@ axis(side=1, at=c(1-0.5,14-0.5,26+0.5), labels=c('65S','0','65N'), cex.axis=2, l
 
 refData <- grid2lat(estMat = MatRichCell, CellLatMat = CellLatMat)
 refData <- refData/max(refData[,1])
-polygon(c(.5:25.5, rev(.5:25.5)), c(rev(refData[,1]+refData[,2]), refData[,1]-refData[,2]), col=rgb(222,222,222, maxColorValue = 255), border=NA)
+polygon(c(.5:25.5, rev(.5:25.5)), c((refData[,1]+refData[,2]), rev(refData[,1]-refData[,2])), col=rgb(222,222,222, maxColorValue = 255), border=NA)
 
 arrows(1:26, estSTD[,1], 1:26, estSTD[,1]-estSTD[,2], lwd=2.5, angle=90, code=3, length=0.03)
 lines(estSTD[,1], lwd=2, lty=2)
@@ -1361,15 +1375,15 @@ myPalette <- c('#67001f','#b2182b','#d6604d','#f4a582','#fddbc7','#d1e5f0','#92c
 
 ### Latitude
 # Open files
-MatRichLat <- read.table("./Data/SimOutput/RSFD_nat_Trop79_seINC/MatRichLat.txt", h=F, na.strings = -1)
-MatChao2Lat <- read.table("./Data/SimOutput/RSFD_nat_Trop79_seINC/MatChao2Lat.txt", h=F, na.strings = -1)
-MatInExtLat <- read.table("./Data/SimOutput/RSFD_nat_Trop79_seINC/MatInExtLat.txt", h=F, na.strings = -1)
-MatES50Lat <- read.table("./Data/SimOutput/RSFD_nat_Trop79_seINC/MatES50Lat.txt", h=F, na.strings = -1)
+MatRichLat <- read.table("./Data/SimOutput/RSFD_nat_Trop119_seINC/MatRichLat.txt", h=F, na.strings = -1)
+MatChao2Lat <- read.table("./Data/SimOutput/RSFD_nat_Trop119_seINC/MatChao2Lat.txt", h=F, na.strings = -1)
+MatInExtLat <- read.table("./Data/SimOutput/RSFD_nat_Trop119_seINC/MatInExtLat.txt", h=F, na.strings = -1)
+MatES50Lat <- read.table("./Data/SimOutput/RSFD_nat_Trop119_seINC/MatES50Lat.txt", h=F, na.strings = -1)
 
-MatRichLat <- read.table("./Data/SimOutput/RSFD_nat_Trop79_seConc_seINC/MatRichLat.txt", h=F, na.strings = -1)
-MatChao2Lat <- read.table("./Data/SimOutput/RSFD_nat_Trop79_seConc_seINC/MatChao2Lat.txt", h=F, na.strings = -1)
-MatInExtLat <- read.table("./Data/SimOutput/RSFD_nat_Trop79_seConc_seINC/MatInExtLat.txt", h=F, na.strings = -1)
-MatES50Lat <- read.table("./Data/SimOutput/RSFD_nat_Trop79_seConc_seINC/MatES50Lat.txt", h=F, na.strings = -1)
+MatRichLat <- read.table("./Data/SimOutput/RSFD_nat_Trop119_seConc_seINC/MatRichLat.txt", h=F, na.strings = -1)
+MatChao2Lat <- read.table("./Data/SimOutput/RSFD_nat_Trop119_seConc_seINC/MatChao2Lat.txt", h=F, na.strings = -1)
+MatInExtLat <- read.table("./Data/SimOutput/RSFD_nat_Trop119_seConc_seINC/MatInExtLat.txt", h=F, na.strings = -1)
+MatES50Lat <- read.table("./Data/SimOutput/RSFD_nat_Trop119_seConc_seINC/MatES50Lat.txt", h=F, na.strings = -1)
 
 
 ## Chao2 estimate
@@ -1399,7 +1413,6 @@ for(j in 1:nrow(CellLatMat))
 {
   overlVec[j] <- integrate(int_f, -Inf, Inf, mu1=mu1[j], mu2=mu2[j], sd1=sd1[j], sd2=sd2[j])[[1]]
 }
-overlVec <- rev(overlVec)
 mycol <- myPalette[cut(overlVec, breaks = seq(0,1,.1))]
 
 # Plot
@@ -1440,7 +1453,6 @@ for(j in 1:nrow(CellLatMat))
 {
   overlVec[j] <- integrate(int_f, -Inf, Inf, mu1=mu1[j], mu2=mu2[j], sd1=sd1[j], sd2=sd2[j])[[1]]
 }
-overlVec <- rev(overlVec)
 mycol <- myPalette[cut(overlVec, breaks = seq(0,1,.1))]
 
 # Plot
@@ -1482,7 +1494,6 @@ for(j in 1:nrow(CellLatMat))
     overlVec[j] <- integrate(int_f, -Inf, Inf, mu1=mu1[j], mu2=mu2[j], sd1=sd1[j], sd2=sd2[j])[[1]]
   }
 }
-overlVec <- rev(overlVec)
 mycol <- myPalette[cut(overlVec, breaks = seq(0,1,.1))]
 
 # Plot
@@ -1500,17 +1511,18 @@ points(es50SAM/max(es50SAM, na.rm = T), pch=21, bg=mycol, cex=2.5)
 
 # Estimates
 ophiPoints <- ophiAtlant
-coordinates(ophiPoints) <- ~decimalLongitude+decimalLatitude
+ophiPoints <- vect(ophiPoints, geom=c("decimalLongitude","decimalLatitude"), crs='epsg:4326')
 
 SampGrid <- AtlGrid
 estimCell <- data.frame(chao2=rep(NA,length(SampGrid)), SCdup=rep(NA,length(SampGrid)), inExt=rep(NA,length(SampGrid)), ES50=rep(NA,length(SampGrid)), Lat=rep(NA,length(SampGrid)))
 for(i in 1:length(SampGrid))
 {
   # For each grid cell...
-  singleCell <- spPolygons(SampGrid@polygons[[i]]@Polygons[[1]]@coords)
+  singleCell <- SampGrid[i,]
   
-  # Find all of its sampling events 
-  ii <- which(!is.na(over(x = ophiPoints, singleCell)))
+  # Find all of its sampling events
+  ii <- relate(ophiPoints, singleCell, relation='intersects', pairs=T)[,1]
+  
   if(length(ii)>0)
   {
     tempMat <- unique(ophiAtlant[ii,1:4])
@@ -1554,10 +1566,11 @@ for(i in 1:length(SampGrid))
 for(i in 1:length(SampGrid))
 {
   # For each grid cell...
-  singleCell <- spPolygons(SampGrid@polygons[[i]]@Polygons[[1]]@coords)
+  singleCell <- SampGrid[i,]
   
-  # Find all of its sampling events 
-  ii <- which(!is.na(over(x = ophiPoints, singleCell)))
+  # Find all of its sampling events
+  ii <- relate(ophiPoints, singleCell, relation='intersects', pairs=T)[,1]
+  
   if(length(ii)>0)
   {
     tempMat <- unique(ophiAtlant[ii,1:4])
@@ -1583,14 +1596,14 @@ for(i in 1:length(SampGrid))
 }
 
 # Average values by latitude
-levs <- rev(levels(cut(ophiAtlant$decimalLatitude, breaks = seq(-65, 65, 5))))
+levs <- levels(cut(ophiAtlant$decimalLatitude, breaks = seq(-65, 65, 5)))
 
 chao2 <- numeric()
 inExt <- numeric()
 es50 <- numeric()
 for(i in 1:length(levs))
 {
-  pos <- which(estimCell$Lat==rev(levs)[i])
+  pos <- which(estimCell$Lat==levs[i])
   
   chao2 <- rbind(chao2, c(mean(estimCell$chao2[pos], na.rm = T), sd(estimCell$chao2[pos], na.rm=T)))
   inExt <- rbind(inExt, c(mean(estimCell$inExt[pos], na.rm = T), sd(estimCell$inExt[pos], na.rm=T)))
@@ -1598,15 +1611,15 @@ for(i in 1:length(levs))
 }
 
 # Open files
-MatRichCell <- read.table("./Data/SimOutput/RSFD_nat_Trop79_seINC/MatRichCell.txt", h=F, na.strings = -1)
-MatChao2Cell <- read.table("./Data/SimOutput/RSFD_nat_Trop79_seINC/MatChao2Cell2Lat.txt", h=F, na.strings = -1)
-MatInExtCell <- read.table("./Data/SimOutput/RSFD_nat_Trop79_seINC/MatInExtCell2Lat.txt", h=F, na.strings = -1)
-MatES50Cell <- read.table("./Data/SimOutput/RSFD_nat_Trop79_seINC/MatES50Cell2Lat.txt", h=F, na.strings = -1)
+MatRichCell <- read.table("./Data/SimOutput/RSFD_nat_Trop119_seINC/MatRichCell.txt", h=F, na.strings = -1)
+MatChao2Cell <- read.table("./Data/SimOutput/RSFD_nat_Trop119_seINC/MatChao2Cell2Lat.txt", h=F, na.strings = -1)
+MatInExtCell <- read.table("./Data/SimOutput/RSFD_nat_Trop119_seINC/MatInExtCell2Lat.txt", h=F, na.strings = -1)
+MatES50Cell <- read.table("./Data/SimOutput/RSFD_nat_Trop119_seINC/MatES50Cell2Lat.txt", h=F, na.strings = -1)
 
-MatRichCell <- read.table("./Data/SimOutput/RSFD_nat_Trop79_seConc_seINC/MatRichCell.txt", h=F, na.strings = -1)
-MatChao2Cell <- read.table("./Data/SimOutput/RSFD_nat_Trop79_seConc_seINC/MatChao2Cell2Lat.txt", h=F, na.strings = -1)
-MatInExtCell <- read.table("./Data/SimOutput/RSFD_nat_Trop79_seConc_seINC/MatInExtCell2Lat.txt", h=F, na.strings = -1)
-MatES50Cell <- read.table("./Data/SimOutput/RSFD_nat_Trop79_seConc_seINC/MatES50Cell2Lat.txt", h=F, na.strings = -1)
+MatRichCell <- read.table("./Data/SimOutput/RSFD_nat_Trop119_seConc_seINC/MatRichCell.txt", h=F, na.strings = -1)
+MatChao2Cell <- read.table("./Data/SimOutput/RSFD_nat_Trop119_seConc_seINC/MatChao2Cell2Lat.txt", h=F, na.strings = -1)
+MatInExtCell <- read.table("./Data/SimOutput/RSFD_nat_Trop119_seConc_seINC/MatInExtCell2Lat.txt", h=F, na.strings = -1)
+MatES50Cell <- read.table("./Data/SimOutput/RSFD_nat_Trop119_seConc_seINC/MatES50Cell2Lat.txt", h=F, na.strings = -1)
 
 
 # Define the reliability of the estimates
@@ -1631,7 +1644,6 @@ for(j in 1:nrow(CellLatMat))
     overlVec[j] <- integrate(int_f, -Inf, Inf, mu1=mu1[j], mu2=mu2[j], sd1=sd1[j], sd2=sd2[j])[[1]]
   }
 }
-overlVec <- rev(overlVec)
 mycol <- myPalette[cut(overlVec, breaks = seq(0,1,.1))]
 mycol[is.na(mycol)] <- 'white'
   

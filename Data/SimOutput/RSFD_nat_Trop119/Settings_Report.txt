@@ -1,0 +1,19 @@
+Number of species: 675
+Number of simulations: 2000
+
+
++--- Range Structure ---+
+Contiguous geographic range?: y
+
+Founder location random?: n
+	Alpha and beta parameters to shape founder distribution: 11 9
+
+Alpha and beta parameters to shape the RSFD: 0.3 5
+
+
++--- Sampling Protocol ---+
+Sampling effort latitudinally static?: y
+
+Records per sampling event flexible?: y
+
+Sampling effort longitudinally random?: y
